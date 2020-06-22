@@ -4,6 +4,7 @@ import IProductsRepository from '@modules/products/repositories/IProductsReposit
 import ICreateProductDTO from '@modules/products/dtos/ICreateProductDTO';
 import IUpdateProductsQuantityDTO from '@modules/products/dtos/IUpdateProductsQuantityDTO';
 import Product from '../entities/Product';
+import AppError from '@shared/errors/AppError';
 
 interface IFindProducts {
   id: string;
@@ -38,14 +39,45 @@ class ProductsRepository implements IProductsRepository {
   }
 
   public async findAllById(products: IFindProducts[]): Promise<Product[]> {
-    // TODO
-    return [] as Product[];
+    const listProductsID = products.map(product => product.id);
+    const orderProdList = await this.ormRepository.find({
+      id: In(listProductsID),
+    });
+
+    if (listProductsID.length !== orderProdList.length) {
+      throw new AppError('There is products that was not registered');
+    }
+    return orderProdList;
   }
 
   public async updateQuantity(
     products: IUpdateProductsQuantityDTO[],
   ): Promise<Product[]> {
-    return [] as Product[];
+    const productsData = await this.findAllById(products);
+
+    const updatedProducts = productsData.map(productData => {
+      const productFind = products.find(
+        product => product.id === productData.id,
+      );
+
+      if (!productFind) {
+        throw new AppError('Products does not exists');
+      }
+
+      if (productData.quantity < productFind.quantity) {
+        throw new AppError('There is less products than you sold');
+      }
+
+      const updatedProduct = productData;
+
+      updatedProduct.quantity -= productFind.quantity;
+
+      return updatedProduct;
+    });
+
+    await this.ormRepository.save(updatedProducts);
+
+    return updatedProducts;
   }
 }
 
